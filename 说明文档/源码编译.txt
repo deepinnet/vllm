@@ -1,0 +1,51 @@
+
+sudo apt install python3.12-venv
+
+python3.11 -m venv .venv
+
+source .venv/bin/activate
+
+VLLM_USE_PRECOMPILED=1 pip install --editable . -v
+
+
+--创建一个python3.11的虚拟环境
+conda create -p ./.vllm python=3.11 -y
+
+
+
+您将修改后的 vllm 打包成 wheel 包。以下是具体步骤：=======================
+首先在 vllm 目录下构建 wheel 包：
+
+cd /path/to/vllm
+# 确保安装了构建工具
+pip install build
+# 设置环境变量使用预编译包
+export VLLM_USE_PRECOMPILED=1
+# 构建 wheel 包
+python -m build
+
+
+
+这会在 dist 目录下生成两个文件：
+vllm-x.x.x.tar.gz (源代码包)
+vllm-x.x.x-py3-none-any.whl (wheel 包)
+
+在您的项目中安装这个 wheel 包：
+
+cd /path/to/your_project
+# 创建新的虚拟环境
+python3 -m venv .venv
+source .venv/bin/activate
+# 安装 wheel 包
+pip install /path/to/vllm/dist/vllm-x.x.x-py3-none-any.whl
+
+
+在您的项目的 requirements.txt 中指定 wheel 包路径：
+
+/path/to/vllm/dist/vllm-x.x.x-py3-none-any.whl
+
+
+或者在 pyproject.toml 中：
+
+[tool.poetry.dependencies]
+vllm = {path = "/root/yunteng_dev/vllm/dist/vllm-0.1.dev6593+g18a5d3f.d20250520.precompiled.precompiled-cp311-cp311-linux_x86_64.whl"}
