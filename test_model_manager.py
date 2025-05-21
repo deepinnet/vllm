@@ -4,7 +4,10 @@ from vllm.entrypoints.openai.api_server import run_server
 from vllm.entrypoints.openai.cli_args import make_arg_parser, validate_parsed_serve_args
 from vllm.utils import FlexibleArgumentParser
 from vllm.sampling_params import SamplingParams
-from vllm.entrypoints.openai.api_server import model_manager
+from vllm.entrypoints.openai.model_manager import ModelManager
+
+# 获取全局模型管理器实例
+model_manager = ModelManager.get_instance()
 
 class TestModelManager:
     def __init__(self):
@@ -34,8 +37,8 @@ class TestModelManager:
         
     async def test_model_operations(self):
         """测试模型管理器的各种操作"""
-        # 1. 获取模型实例
-        llm = model_manager.get_model(self.model_name)
+        # 1. 获取模型实例（等待加载完成）
+        llm = await model_manager.get_model(self.model_name)
         if llm is None:
             print(f"模型 {self.model_name} 未加载")
             return
@@ -88,10 +91,6 @@ class TestModelManager:
             print("正在启动服务器...")
             await self.start_server()
             
-            # 等待模型加载完成
-            print("\n等待模型加载...")
-            await self.wait_for_model_ready()
-            
             # 运行模型操作测试
             print("\n开始测试模型操作...")
             await self.test_model_operations()
@@ -112,8 +111,6 @@ class TestModelManager:
                 print(f"已移除模型: {self.model_name}")
 
 def main():
-    import vllm
-    print(f"当前使用的 vllm 包路径: {vllm.__file__}")
     test = TestModelManager()
     uvloop.run(test.run_tests())
 

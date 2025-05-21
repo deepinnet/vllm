@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from functools import partial
 from http import HTTPStatus
 from json import JSONDecodeError
-from typing import Annotated, Dict, Optional, Union
+from typing import Annotated, Optional, Union
 
 import prometheus_client
 import uvloop
@@ -101,6 +101,8 @@ from vllm.utils import (Device, FlexibleArgumentParser, get_open_zmq_ipc_path,
                         is_valid_ipv6_address, set_ulimit)
 from vllm.version import __version__ as VLLM_VERSION
 
+from vllm.entrypoints.openai.model_manager import ModelManager
+
 TIMEOUT_KEEP_ALIVE = 5  # seconds
 
 prometheus_multiproc_dir: tempfile.TemporaryDirectory
@@ -110,43 +112,8 @@ logger = init_logger('vllm.entrypoints.openai.api_server')
 
 _running_tasks: set[asyncio.Task] = set()
 
-
-class ModelManager:
-    """全局模型管理器，用于管理所有已加载的模型实例"""
-    _instance = None
-    _models: Dict[str, EngineClient] = {}
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(ModelManager, cls).__new__(cls)
-        return cls._instance
-    
-    @classmethod
-    def get_instance(cls) -> 'ModelManager':
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
-    
-    def add_model(self, model_name: str, model: EngineClient):
-        """添加一个模型实例到管理器"""
-        self._models[model_name] = model
-    
-    def get_model(self, model_name: str) -> Optional[EngineClient]:
-        """获取指定名称的模型实例"""
-        return self._models.get(model_name)
-    
-    def list_models(self) -> list[str]:
-        """列出所有已加载的模型名称"""
-        return list(self._models.keys())
-    
-    def remove_model(self, model_name: str):
-        """移除指定名称的模型实例"""
-        if model_name in self._models:
-            del self._models[model_name]
-
 # 创建全局模型管理器实例
 model_manager = ModelManager.get_instance()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -177,7 +144,6 @@ async def lifespan(app: FastAPI):
     finally:
         # Ensure app state including engine ref is gc'd
         del app.state
-
 
 @asynccontextmanager
 async def build_async_engine_client(
@@ -330,11 +296,8 @@ async def build_async_engine_client_from_engine_args(
                         raise RuntimeError(
                             "Engine process failed to start. See stack "
                             "trace for the root cause.") from None
-
-            # 添加到模型管理器
             model_manager.add_model(engine_args.model, mq_engine_client)
             logger.info(f"模型 {engine_args.model} 已添加到缓存")
-
             yield mq_engine_client  # type: ignore[misc]
         finally:
             # Ensure rpc server process was terminated
@@ -1340,7 +1303,6 @@ def create_server_socket(addr: tuple[str, int]) -> socket.socket:
 
 
 async def run_server(args, **uvicorn_kwargs) -> None:
-    logger.info("开始执行 run_server 函数...")
     logger.info("vLLM API server version %s", VLLM_VERSION)
     log_non_default_args(args)
 
@@ -1360,13 +1322,11 @@ async def run_server(args, **uvicorn_kwargs) -> None:
             f"invalid reasoning parser: {args.reasoning_parser} "
             f"(chose from {{ {','.join(valid_reasoning_parses)} }})")
 
-    logger.info("开始创建服务器 socket...")
     # workaround to make sure that we bind the port before the engine is set up.
     # This avoids race conditions with ray.
     # see https://github.com/vllm-project/vllm/issues/8204
     sock_addr = (args.host or "", args.port)
     sock = create_server_socket(sock_addr)
-    logger.info("服务器 socket 创建完成")
 
     # workaround to avoid footguns where uvicorn drops requests with too
     # many concurrent requests active
@@ -1378,9 +1338,7 @@ async def run_server(args, **uvicorn_kwargs) -> None:
 
     signal.signal(signal.SIGTERM, signal_handler)
 
-    logger.info("开始创建 engine client...")
     async with build_async_engine_client(args) as engine_client:
-        logger.info("engine client 创建完成")
         app = build_app(args)
 
         vllm_config = await engine_client.get_vllm_config()
@@ -1395,8 +1353,8 @@ async def run_server(args, **uvicorn_kwargs) -> None:
         logger.info("Starting vLLM API server on http%s://%s:%d",
                     "s" if is_ssl else "", _listen_addr(sock_addr[0]),
                     sock_addr[1])
+        logger.info("开始启动 HTTP 服务器...%s:%d",args.host,args.port)
 
-        logger.info("开始启动 HTTP 服务器...")
         shutdown_task = await serve_http(
             app,
             sock=sock,
@@ -1414,7 +1372,7 @@ async def run_server(args, **uvicorn_kwargs) -> None:
             ssl_cert_reqs=args.ssl_cert_reqs,
             **uvicorn_kwargs,
         )
-        logger.info("HTTP 服务器启动完成")
+        logger.info("HTTP 服务器启动完成%s:%d",args.host,args.port)
 
     # NB: Await server shutdown only after the backend context is exited
     try:
