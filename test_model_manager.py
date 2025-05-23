@@ -112,7 +112,8 @@ class TestModelManager:
 
 def main():
     test = TestModelManager()
-    uvloop.run(test.run_tests())
+    # uvloop.run(test.run_tests())
+    asyncio.run(test.run_tests())
 
 if __name__ == "__main__":
     main() 

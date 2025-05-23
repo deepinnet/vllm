@@ -39,18 +39,49 @@ python -m build
 --------------------------
 cd /path/to/vllm
 # 清理旧的构建文件
-rm -rf .deps build/ dist/
-find . -type d -name "__pycache__" -exec rm -r {} +
-find . -type f -name "*.pyc" -delete
-pip uninstall vllm -y
+rm -rf .deps build/ dist/ && find . -type d -name "__pycache__" -exec rm -r {} + && find . -type f -name "*.pyc" -delete
 
-# 确保安装了构建工具
-pip install build
-# 设置环境变量使用预编译包
-export VLLM_USE_PRECOMPILED=1
-# 构建 wheel 包
-python -m build
+#只编译python相关代码，不包含c++
+export VLLM_USE_PRECOMPILED=1 && pip install build && python -m build
+
+#编译完整的代码，包含c++
+#首先要确保nvcc能够访问，nvcc 可能没有设置到环境变量上
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+pip install build && python -m build
+
+
+-------------
+1. 打开 CUDA 12.4 官方归档下载页面：
+🔗 https://developer.nvidia.com/cuda-12-4-0-download-archive
+chmod +x cuda_12.4.0_545.23.08_linux.run
+sudo ./cuda_12.4.0_545.23.08_linux.run
+
+│ CUDA Installer                                                               │
+│ - [ ] Driver                                                                 │
+│      [ ] 550.54.14                                                           │
+│ + [X] CUDA Toolkit 12.4                                                      │
+│   [X] CUDA Demo Suite 12.4                                                   │
+│   [X] CUDA Documentation 12.4                                                │
+│ - [ ] Kernel Objects                                                         │
+│      [ ] nvidia-fs                                                           │
+│   Options                                                                    │
+│   Install   
+
+
+为了确保一切工具链工作正常，建议你将以下路径加入 .bashrc 或 .zshrc：
+export PATH=/usr/local/cuda-12.4/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:$LD_LIBRARY_PATH
+
+# 6. 验证安装
+ls -l /usr/local/cuda-12.4/bin/cicc
+nvcc --version
+
+ls -l /usr/local/cuda-12.4/targets/x86_64-linux/include/crt/
 -------------------------
+注意，不要开启学术加速，不然出现如下错误
+error: Failed to get vLLM wheel from https://wheels.vllm.ai/nightly/vllm-1.0.0.dev-cp38-abi3-manylinux1_x86_64.whl
 
 这会在 dist 目录下生成两个文件：
 vllm-x.x.x.tar.gz (源代码包)
@@ -78,3 +109,7 @@ allow-direct-references = true
 
 [tool.poetry.dependencies]
 "vllm @ file:///root/yunteng_dev/vllm/dist/vllm-0.1.dev6594+gf592024.d20250521.precompiled.precompiled-cp311-cp311-linux_x86_64.whl",
+
+
+
+export PATH=/usr/local/cuda-12.4/bin:$PATH && export LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:$LD_LIBRARY_PATH && export NVTX3_DIR=/usr/local/cuda-12.4 && pip install build && python -m build
