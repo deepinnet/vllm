@@ -38,7 +38,7 @@ class TestModelManager:
     async def test_model_operations(self):
         """测试模型管理器的各种操作"""
         # 1. 获取模型实例（等待加载完成）
-        llm = await model_manager.get_model(self.model_name)
+        llm = await model_manager.get_model_assync(self.model_name)
         if llm is None:
             print(f"模型 {self.model_name} 未加载")
             return

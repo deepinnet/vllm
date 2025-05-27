@@ -1,7 +1,11 @@
 import asyncio
 from typing import Dict, Optional
+from vllm.logger import init_logger
+import time
+
 
 from vllm.engine.protocol import EngineClient
+logger = init_logger(__name__)
 
 class ModelManager:
     """全局模型管理器，用于管理所有已加载的模型实例"""
@@ -23,7 +27,36 @@ class ModelManager:
         """添加一个模型实例到管理器"""
         self._models[model_name] = model
     
-    async def get_model(self, model_name: str, wait: bool = True, retry_interval: int = 2) -> Optional[EngineClient]:
+    def get_model(self, model_path: str, wait: bool = True, retry_interval: int = 2) -> Optional[EngineClient]:
+        """获取指定名称的模型实例
+        
+        Args:
+            model_name: 模型路径
+            wait: 是否等待模型加载完成
+            retry_interval: 重试间隔时间(秒)
+            
+        Returns:
+            Optional[EngineClient]: 模型实例，如果未找到则返回 None
+        """
+        if not wait:
+            return self._models.get(model_path)
+            
+        logger.info(f"开始等待模型加载... {model_path}")
+        attempt = 1
+        while True:
+            try:
+                logger.info(f"尝试获取模型实例 (尝试 {attempt}, 模型路径: {model_path})...")
+                llm = self._models.get(model_path)
+                if llm is not None:
+                    logger.info(f"模型已成功加载，尝试次数: {attempt}, 模型路径: {model_path}")
+                    return llm
+            except Exception as e:
+                logger.error(f"获取模型实例失败: {str(e)}, 模型路径: {model_path}")
+            logger.info(f"等待模型加载中... (尝试 {attempt}, 模型路径: {model_path})")
+            time.sleep(retry_interval)
+            attempt += 1
+
+    async def get_model_assync(self, model_path: str, wait: bool = True, retry_interval: int = 2) -> Optional[EngineClient]:
         """获取指定名称的模型实例
         
         Args:
@@ -35,20 +68,20 @@ class ModelManager:
             Optional[EngineClient]: 模型实例，如果未找到则返回 None
         """
         if not wait:
-            return self._models.get(model_name)
+            return self._models.get(model_path)
             
-        print("开始等待模型加载...")
+        logger.info("开始等待模型加载...")
         attempt = 1
         while True:
             try:
-                print(f"尝试获取模型实例 (尝试 {attempt})...")
-                llm = self._models.get(model_name)
+                logger.info(f"尝试获取模型实例 (尝试 {attempt})...")
+                llm = self._models.get(model_path)
                 if llm is not None:
-                    print(f"模型已成功加载，尝试次数: {attempt}")
+                    logger.info(f"模型已成功加载，尝试次数: {attempt}")
                     return llm
             except Exception as e:
-                print(f"获取模型实例失败: {str(e)}")
-            print(f"等待模型加载中... (尝试 {attempt})")
+                logger.error(f"获取模型实例失败: {str(e)}")
+            logger.info(f"等待模型加载中... (尝试 {attempt})")
             await asyncio.sleep(retry_interval)
             attempt += 1
     
